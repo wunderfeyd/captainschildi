@@ -1,0 +1,46 @@
+<html>
+<head>
+<script src="src/utils.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/math.js"></script>
+<script src="src/polygon.js"></script>
+<script src="src/graphic.js"></script>
+<script>
+"use strict";
+
+var am;
+var gm;
+var canvas;
+
+function init() {
+  am = new AudioManager();
+
+  var samples = [];
+  samples.push(am.load_sample("pad_wavetable.wav", "#f00"));
+  samples.push(am.load_sample("bass_wave1.wav", "#0f0"));
+
+  canvas = document.getElementById("graphics");
+  gm = new GraphicManager(canvas);
+  am.pump();
+  gm.pump();
+  gm.setCallback(frame);
+  console.log(randomFloat(0, 1));
+  console.log(Vector3);
+  console.log(Vector3.prototype.random());
+  console.log(Vector3.prototype.random());
+  console.log(Vector3.prototype.random());
+  console.log(Vector3.prototype.random());
+}
+
+function frame(time) {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  gm.clear();
+}
+
+</script>
+</head>
+<body style="width:100%; height:100%; background-color:#000; margin:0; padding:0;" onload="init()">
+<canvas id="graphics" width="640" height="480" style="width:100%; height:100%; margin:0; padding:0;"></canvas>
+</body>
+</html>
