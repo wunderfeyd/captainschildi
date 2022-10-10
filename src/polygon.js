@@ -1,5 +1,11 @@
 "use strict";
 
+function polygonFromPoints(ref, points) {
+  let polygon = new Polygon(ref);
+  polygon.points = points;
+  return polygon;
+}
+
 function Polygon(ref) {
   this.points = [];
   this.ref = ref;
@@ -55,17 +61,57 @@ Polygon.prototype.intersectingLine = function(from, to) {
 
   let diff = Math.abs(dist0)+Math.abs(dist1);
   let interpolated = to.subVector3(from).mulScalar(Math.abs(dist0)/diff).addVector3(from);
+  return this.pointOnPolygon(interpolated);
+}
+
+Polygon.prototype.pointOnPolygon = function(position) {
+  let normal = this.calculateNormal();
   for (let p0 = 0; p0<this.points.length; p0++) {
     let p1 = (p0+1)%this.points.length;
     let direction = this.points[p1].subVector3(this.points[p0]).normalize();
     let inside = direction.crossVector3(normal);
-    let dist = interpolated.subVector3(this.points[p1]).dotVector3(inside);
+    let dist = position.subVector3(this.points[p1]).dotVector3(inside);
     if (dist<0) {
       return false;
     }
   }
 
   return true;
+}
+
+Polygon.prototype.pointDistance = function(from) {
+  let normal = this.calculateNormal();
+  let dist = from.subVector3(this.points[0]).dotVector3(normal);
+  if (this.pointOnPolygon(from)) {
+    return [dist, from.addVector3(normal.mulScalar(dist)), normal];
+  }
+
+  let min_dist = 10000000.0;
+  let min_position = null;
+  for (let p0 = 0; p0<this.points.length; p0++) {
+    let p1 = (p0+1)%this.points.length;
+    let length = this.points[p1].subVector3(this.points[p0]);
+    let direction = length.normalize();
+    let inside = direction.crossVector3(normal);
+    let diff = from.subVector3(this.points[p1]);
+    let linePos = diff.dotVector3(direction);
+    if (linePos>=0 && linePos<length) {
+      let planar = new Vector2(diff.dotVector3(inside), diff.dotVector3(normal));
+      let dist = planar.length();
+      if (dist<min_dist) {
+        min_dist = dist;
+        min_position = direction.mulScalar(linePos).addVector3(this.points[p1]);
+      }
+    }
+
+    let dist = this.points[p0].subVector3(from);
+    if (dist<min_dist) {
+      min_dist = dist;
+      min_position = this.points[p0];
+    }
+  }
+
+  return [min_dist, min_position, normal];
 }
 
 Polygon.prototype.intersectingPolygon = function(other) {
@@ -97,6 +143,15 @@ Polygon.prototype.triangleFan = function() {
   return polygons;
 }
 
+Polygon.prototype.invertNormals = function() {
+  let poly = new Polygon(this.ref);
+  for (let n = this.points.length-1; n>=0; n--) {
+    poly.points.push(this.points[n]);
+  }
+
+  return poly;
+}
+
 Polygon.prototype.area = function() {
   let area = 0;
   let normal = this.calculateNormal();
@@ -110,4 +165,13 @@ Polygon.prototype.area = function() {
   }
 
   return area;
+}
+
+Polygon.prototype.mulMatrix4 = function(matrix) {
+  let poly = new Polygon(this.ref);
+  for (let n = 0; n<this.points.length; n++) {
+    poly.points.push(matrix.mulVector3(this.points[n]));
+  }
+
+  return poly;
 }

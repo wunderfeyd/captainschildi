@@ -1,24 +1,28 @@
-<html>
+<!DOCTYPE html>
+<html style="margin:0; padding:0;">
 <head>
 <script src="src/utils.js"></script>
 <script src="src/audio.js"></script>
 <script src="src/math.js"></script>
 <script src="src/polygon.js"></script>
+<script src="src/mesh.js"></script>
 <script src="src/graphic.js"></script>
 <script>
 "use strict";
 
-var am;
-var gm;
-var canvas;
+let am;
+let gm;
+let canvas;
+let body;
 
 function init() {
   am = new AudioManager();
 
-  var samples = [];
+  let samples = [];
   samples.push(am.load_sample("pad_wavetable.wav", "#f00"));
   samples.push(am.load_sample("bass_wave1.wav", "#0f0"));
 
+  body = document.getElementById("body");
   canvas = document.getElementById("graphics");
   gm = new GraphicManager(canvas);
   am.pump();
@@ -33,14 +37,14 @@ function init() {
 }
 
 function frame(time) {
-  canvas.width = canvas.offsetWidth;
-  canvas.height = canvas.offsetHeight;
+  canvas.width = document.documentElement.clientWidth;
+  canvas.height = document.documentElement.clientHeight;
   gm.clear();
 }
 
 </script>
 </head>
-<body style="width:100%; height:100%; background-color:#000; margin:0; padding:0;" onload="init()">
-<canvas id="graphics" width="640" height="480" style="width:100%; height:100%; margin:0; padding:0;"></canvas>
+<body style="background-color:#000; margin:0; padding:0;" onload="init()" id="body">
+<canvas id="graphics" width="0" height="0" style="margin:0; padding:0; display:block;"></canvas>
 </body>
 </html>

@@ -316,7 +316,7 @@ Matrix4.prototype.projection = function(fov, ratio, near, far, scale) {
   return this.frustum(-width*0.5, width*0.5, -height*0.5, height*0.5, near, far);
 }
 
-Matrix4.prototype.translate = function(offset) {
+Matrix4.prototype.translateVector3 = function(offset) {
   let mat = new Matrix4();
   mat.c0 = new Vector4(this.c0.c0, this.c0.c1, this.c0.c2, this.c0.dotVector3(offset));
   mat.c1 = new Vector4(this.c1.c0, this.c1.c1, this.c1.c2, this.c1.dotVector3(offset));
@@ -324,6 +324,16 @@ Matrix4.prototype.translate = function(offset) {
   mat.c3 = new Vector4(this.c3.c0, this.c3.c1, this.c3.c2, this.c3.c3);
   return mat;
 }
+
+Matrix4.prototype.scaleVector3 = function(scale) {
+  let mat = new Matrix4();
+  mat.c0 = new Vector4(this.c0.c0*scale.c0, this.c0.c1*scale.c0, this.c0.c2*scale.c0, this.c0.c3);
+  mat.c1 = new Vector4(this.c1.c0*scale.c1, this.c1.c1*scale.c1, this.c1.c2*scale.c1, this.c1.c3);
+  mat.c2 = new Vector4(this.c2.c0*scale.c2, this.c2.c1*scale.c2, this.c2.c2*scale.c2, this.c2.c3);
+  mat.c3 = new Vector4(this.c3.c0, this.c3.c1, this.c3.c2, this.c3.c3);
+  return mat;
+}
+
 
 function Quaternion(ic0 = 0.0, ic1 = 0.0, ic2 = 0.0, ic3 = 0.0) {
   this.c0 = ic0;

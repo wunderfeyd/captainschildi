@@ -40,7 +40,7 @@ GraphicManager.prototype.clear = function(color) {
   let t = performance.now()/1000;
   let sx = Math.sin(t);
   let sz = Math.cos(t);
-  let camera = new Vector3(sx*100, 0, sz*100);
+  let camera = new Vector3(sx*10, 0, sz*10);
   let up = new Vector3(0, 1, 0);
   let to = new Vector3(0, 0, 0);
   let projection = Matrix4.prototype.projection(45, w/h, 1, 10000, 1);
@@ -50,96 +50,47 @@ GraphicManager.prototype.clear = function(color) {
   this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
   if (this.program1!=null) {
-    let polys = [];
-    {
-      let poly = new Polygon(0);
-      poly.points.push(new Vector3(-10.0, -10.0+Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(-10.0, 10.0+Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(10.0, 10.0+Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(10.0, -10.0+Math.sin(t*0.25)*40, 0));
-      polys.push(poly);
-    }
+    let mesh1 = Mesh.prototype.createBox();
+    let mesh2 = Mesh.prototype.createBox();
 
-/*      {
-      let poly = new Polygon(0);
-      poly.points.push(new Vector3(-10.0, -10.0-Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(-10.0, 10.0-Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(10.0, 10.0-Math.sin(t*0.25)*40, 0));
-      poly.points.push(new Vector3(10.0, -10.0-Math.sin(t*0.25)*40, 0));
-      polys.push(poly);
-    }*/
+    let matrix = Matrix4.prototype.identity();
+    matrix = matrix.scaleVector3(new Vector3(2, 2, 2));
+
+    matrix = matrix.translateVector3(new Vector3(0, 0, 0));
+    mesh1 = mesh1.mulMatrix4(matrix);
+
+    matrix = matrix.translateVector3(new Vector3(0.5, 0.5, 0.5));
+    mesh2 = mesh2.mulMatrix4(matrix);
+
+    let meshx1 = mesh1.cutMesh(mesh2, false);
+    let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
+    let mesh = meshx1.concatMesh(meshx2);
 
     {
-      let poly = new Polygon(0);
-      poly.points.push(new Vector3(-50.0, 20, -50.0));
-      poly.points.push(new Vector3(-50.0, 20, 50.0));
-      poly.points.push(new Vector3(50.0, 20, 50.0));
-      poly.points.push(new Vector3(50.0, 20, -50.0));
-      polys.push(poly);
-    }
-
-    {
-      for (let q = -100; q<100; q+=16) {
-        let cuts = [];
-        for (let n = 0; n<polys.length; n++) {
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(0, 1, 0), new Vector3(0, q, 0));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(0, -1, 0), new Vector3(0, q, 0));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
+      for (let q = -100; q<100; q+=50) {
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(1, 0, 0), new Vector3(q, 0, 0));
+          let meshRight = mesh.splitByPlane(new Vector3(-1, 0, 0), new Vector3(q, 0, 0));
+          mesh = meshLeft.concatMesh(meshRight);
         }
-        polys = cuts;
-      }
 
-      for (let q = -100; q<100; q+=16) {
-        let cuts = [];
-        for (let n = 0; n<polys.length; n++) {
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(1, 0, 0), new Vector3(q, 0, 0));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(-1, 0, 0), new Vector3(q, 0, 0));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(0, 1, 0), new Vector3(0, q, 0));
+          let meshRight = mesh.splitByPlane(new Vector3(0, -1, 0), new Vector3(0, q, 0));
+          mesh = meshLeft.concatMesh(meshRight);
         }
-        polys = cuts;
-      }
 
-      for (let q = -100; q<100; q+=16) {
-        let cuts = [];
-        for (let n = 0; n<polys.length; n++) {
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(0, 0, 1), new Vector3(0, 0, q));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
-          {
-            let cutted = polys[n].splitByPlane(new Vector3(0, 0, -1), new Vector3(0, 0, q));
-            if (cutted) {
-              cuts.push(cutted);
-            }
-          }
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(0, 0, 1), new Vector3(0, 0, q));
+          let meshRight = mesh.splitByPlane(new Vector3(0, 0, -1), new Vector3(0, 0, q));
+          mesh = meshLeft.concatMesh(meshRight);
         }
-        polys = cuts;
       }
     }
 
     let triangles = [];
-    for (let n = 0; n<polys.length; n++) {
-      let poly_tri = polys[n].triangleFan();
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      let poly_tri = mesh.polygons[n].triangleFan();
       triangles = triangles.concat(poly_tri);
     }
 
@@ -194,6 +145,8 @@ GraphicManager.prototype.clear = function(color) {
     this.gl.vertexAttribPointer(this.program1.location.color, 4, this.gl.FLOAT, false, 0, 0);
 
     this.gl.enable(this.gl.DEPTH_TEST);
+    this.gl.enable(this.gl.CULL_FACE);
+    this.gl.cullFace(this.gl.BACK);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, triangles.length*3);
 
     this.gl.deleteBuffer(bufferCoords);
