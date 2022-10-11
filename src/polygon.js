@@ -19,15 +19,22 @@ Polygon.prototype.splitByPlane = function(normal, position) {
     let dist0 = this.points[p0].subVector3(position).dotVector3(normal);
     let dist1 = this.points[p1].subVector3(position).dotVector3(normal);
     if (dist0>=0 && dist1>=0) {
-      points.push(this.points[p0]);
+      if (points.length==0 || points[points.length-1].subVector3(this.points[p0]).length()>0) {
+        points.push(this.points[p0]);
+      }
     } else if (dist0>=0 || dist1>=0) {
       if (dist0>=0) {
-        points.push(this.points[p0]);
+        if (points.length==0 || points[points.length-1].subVector3(this.points[p0]).length()>0) {
+          points.push(this.points[p0]);
+        }
       }
 
       let diff = Math.abs(dist0)+Math.abs(dist1);
       let interpolated = this.points[p1].subVector3(this.points[p0]).mulScalar(Math.abs(dist0)/diff).addVector3(this.points[p0]);
-      points.push(interpolated);
+      if (points.length==0 || points[points.length-1].subVector3(interpolated).length()>0) {
+        points.push(interpolated);
+      }
+
       nocut = false;
     }
   }
@@ -81,7 +88,7 @@ Polygon.prototype.pointOnPolygon = function(position) {
 
 Polygon.prototype.pointDistance = function(from) {
   let normal = this.calculateNormal();
-  let dist = from.subVector3(this.points[0]).dotVector3(normal);
+  let dist = this.points[0].subVector3(from).dotVector3(normal);
   if (this.pointOnPolygon(from)) {
     return [dist, from.addVector3(normal.mulScalar(dist)), normal];
   }
@@ -92,19 +99,20 @@ Polygon.prototype.pointDistance = function(from) {
     let p1 = (p0+1)%this.points.length;
     let length = this.points[p1].subVector3(this.points[p0]);
     let direction = length.normalize();
-    let inside = direction.crossVector3(normal);
-    let diff = from.subVector3(this.points[p1]);
+    length = length.length();
+    let diff = from.subVector3(this.points[p0]);
     let linePos = diff.dotVector3(direction);
     if (linePos>=0 && linePos<length) {
+      let inside = direction.crossVector3(normal);
       let planar = new Vector2(diff.dotVector3(inside), diff.dotVector3(normal));
       let dist = planar.length();
       if (dist<min_dist) {
         min_dist = dist;
-        min_position = direction.mulScalar(linePos).addVector3(this.points[p1]);
+        min_position = direction.mulScalar(linePos).addVector3(this.points[p0]);
       }
     }
 
-    let dist = this.points[p0].subVector3(from);
+    let dist = Math.abs(this.points[p0].subVector3(from).length());
     if (dist<min_dist) {
       min_dist = dist;
       min_position = this.points[p0];

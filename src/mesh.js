@@ -7,34 +7,37 @@ function Mesh(ref) {
 Mesh.prototype.pointInside = function(position) {
   let min = 100000000.0;
   let min_last = null;
-  let min_poly = null;
+  let min_polys = [];
   for (let n = 0; n<this.polygons.length; n++) {
     let result = this.polygons[n].pointDistance(position);
-    if (min>Math.abs(result[0])) {
-      min = Math.abs(result[0]);
-      min_poly = n;
+    let dist = Math.abs(result[0]);
+    if (min>dist) {
+      min = dist;
+      min_polys = [n];
+    } else if (min==dist) {
+      min_polys.push(n);
     }
   }
 
-  let normal = this.polygons[min_poly].calculateNormal();
-  let diff = this.polygons[min_poly].points[0].subVector3(position);
-  if (normal.dotVector3(diff)<0) {
-    return true;
-  } else {
-    return false;
+  for (let n = 0; n<min_polys.length; n++) {
+    let normal = this.polygons[min_polys[n]].calculateNormal();
+    let diff = this.polygons[min_polys[n]].points[0].subVector3(position);
+    if (normal.dotVector3(diff)<-mathEpsilon) {
+      return true;
+    }
   }
+
+  return false;
 }
 
 Mesh.prototype.polygonInside = function(polygon) {
-  let inside = false;
   for (let n = 0; n<polygon.points.length; n++) {
     if (this.pointInside(polygon.points[n])) {
-      inside = true;
-      break;
+      return true;
     }
   }
 
-  return inside;
+  return false;
 }
 
 Mesh.prototype.cutMesh = function(other, inside) {
@@ -46,11 +49,11 @@ Mesh.prototype.cutMesh = function(other, inside) {
         let normal = other.polygons[m].calculateNormal();
         let position = other.polygons[m].points[0];
         let polyLeft = left[n].splitByPlane(normal, position);
-        let polyRight = left[n].splitByPlane(normal.mulScalar(-1), position);
         if (polyLeft) {
           next.push(polyLeft);
         }
 
+        let polyRight = left[n].splitByPlane(normal.mulScalar(-1), position);
         if (polyRight) {
           next.push(polyRight);
         }
@@ -114,6 +117,38 @@ Mesh.prototype.createBox = function() {
   mesh.polygons.push(polygonFromPoints(null, [new Vector3(-1,  1, -1), new Vector3(-1,  1,  1), new Vector3(-1, -1,  1), new Vector3(-1, -1, -1)]));
   mesh.polygons.push(polygonFromPoints(null, [new Vector3(-1, -1, -1), new Vector3(-1, -1,  1), new Vector3( 1, -1,  1), new Vector3( 1, -1, -1)]));
   mesh.polygons.push(polygonFromPoints(null, [new Vector3( 1,  1, -1), new Vector3( 1,  1,  1), new Vector3(-1,  1,  1), new Vector3(-1,  1, -1)]));
+  return mesh;
+}
+
+Mesh.prototype.createSphere = function(segments_latitude, segments_longitude) {
+  let mesh = new Mesh();
+  for (let y0 = 0; y0<segments_latitude; y0++) {
+    let y1 = y0+1;
+    let width0 = Math.sin((y0/segments_latitude)*Math.PI);
+    let width1 = Math.sin((y1/segments_latitude)*Math.PI);
+    let yy0 = Math.cos((y0/segments_latitude)*Math.PI);
+    let yy1 = Math.cos((y1/segments_latitude)*Math.PI);
+    for (let x0 = 0; x0<segments_longitude; x0++) {
+      let x1 = x0+1;
+      let xx00 = Math.sin((x0/segments_longitude)*Math.PI*2)*width0;
+      let xx01 = Math.sin((x1/segments_longitude)*Math.PI*2)*width0;
+      let xx10 = Math.sin((x0/segments_longitude)*Math.PI*2)*width1;
+      let xx11 = Math.sin((x1/segments_longitude)*Math.PI*2)*width1;
+      let zz00 = Math.cos((x0/segments_longitude)*Math.PI*2)*width0;
+      let zz01 = Math.cos((x1/segments_longitude)*Math.PI*2)*width0;
+      let zz10 = Math.cos((x0/segments_longitude)*Math.PI*2)*width1;
+      let zz11 = Math.cos((x1/segments_longitude)*Math.PI*2)*width1;
+
+      if (y0==0) {
+        mesh.polygons.push(polygonFromPoints(null, [new Vector3(xx00, yy0, zz00), new Vector3(xx11, yy1, zz11), new Vector3(xx10, yy1, zz10)]));
+      } else if (y1==segments_latitude) {
+        mesh.polygons.push(polygonFromPoints(null, [new Vector3(xx00, yy0, zz00), new Vector3(xx01, yy0, zz01), new Vector3(xx10, yy1, zz10)]));
+      } else {
+        mesh.polygons.push(polygonFromPoints(null, [new Vector3(xx00, yy0, zz00), new Vector3(xx01, yy0, zz01), new Vector3(xx11, yy1, zz11), new Vector3(xx10, yy1, zz10)]));
+      }
+    }
+  }
+
   return mesh;
 }
 

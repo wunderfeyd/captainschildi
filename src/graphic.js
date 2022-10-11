@@ -40,7 +40,7 @@ GraphicManager.prototype.clear = function(color) {
   let t = performance.now()/1000;
   let sx = Math.sin(t);
   let sz = Math.cos(t);
-  let camera = new Vector3(sx*10, 0, sz*10);
+  let camera = new Vector3(sx*10, -5, sz*10);
   let up = new Vector3(0, 1, 0);
   let to = new Vector3(0, 0, 0);
   let projection = Matrix4.prototype.projection(45, w/h, 1, 10000, 1);
@@ -51,7 +51,7 @@ GraphicManager.prototype.clear = function(color) {
 
   if (this.program1!=null) {
     let mesh1 = Mesh.prototype.createBox();
-    let mesh2 = Mesh.prototype.createBox();
+    let mesh2 = Mesh.prototype.createSphere(16, 16);
 
     let matrix = Matrix4.prototype.identity();
     matrix = matrix.scaleVector3(new Vector3(2, 2, 2));
@@ -59,12 +59,51 @@ GraphicManager.prototype.clear = function(color) {
     matrix = matrix.translateVector3(new Vector3(0, 0, 0));
     mesh1 = mesh1.mulMatrix4(matrix);
 
-    matrix = matrix.translateVector3(new Vector3(0.5, 0.5, 0.5));
+    matrix = matrix.scaleVector3(new Vector3(1.25, 1.25, 1.25));
+    matrix = matrix.translateVector3(new Vector3(0, 0, 0));
     mesh2 = mesh2.mulMatrix4(matrix);
 
     let meshx1 = mesh1.cutMesh(mesh2, false);
     let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
     let mesh = meshx1.concatMesh(meshx2);
+    //let mesh = meshx1;
+    //let mesh = mesh1.concatMesh(mesh2);
+
+    /*
+    // Polygon distance test
+
+    let q = performance.now()/1000;
+    let qx = Math.sin(q*3.3);
+    let qz = Math.cos(q);
+
+    let mesh = new Mesh();
+    mesh.polygons.push(polygonFromPoints(null, [new Vector3(-1, -1,  0), new Vector3(-1,  1,  0), new Vector3( 1,  1,  0), new Vector3( 1, -1,  0)]));
+    mesh.polygons.push(polygonFromPoints(null, [new Vector3( 1, -1,  0), new Vector3( 1,  1,  0), new Vector3(-1,  1,  0), new Vector3(-1, -1,  0)]));
+    //let mesh = Mesh.prototype.createBox();
+
+    let matrix = Matrix4.prototype.identity();
+    matrix = matrix.scaleVector3(new Vector3(50, 50, 50));
+    matrix = matrix.translateVector3(new Vector3(0, 0, 0));
+    mesh = mesh.mulMatrix4(matrix);
+
+    let origin = new Vector3(qx*100, qz*100, -20);
+    let meshp = Mesh.prototype.createBox();
+    let matrixp = Matrix4.prototype.identity();
+    matrixp = matrixp.scaleVector3(new Vector3(5, 5, 5));
+    matrixp = matrixp.translateVector3(origin);
+    meshp = meshp.mulMatrix4(matrixp);
+
+    let result = mesh.polygons[0].pointDistance(origin);
+
+    let meshx = Mesh.prototype.createBox();
+    let matrixx = Matrix4.prototype.identity();
+    matrixx = matrixx.scaleVector3(new Vector3(5, 5, 5));
+    matrixx = matrixx.translateVector3(result[1]);
+    meshx = meshx.mulMatrix4(matrixx);
+
+    mesh = mesh.concatMesh(meshp);
+    mesh = mesh.concatMesh(meshx);
+    */
 
     {
       for (let q = -100; q<100; q+=50) {
