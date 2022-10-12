@@ -21,7 +21,7 @@ function GraphicManager(canvas) {
   }).bind(this));
 
   this.testColors = [];
-  for (let n = 0; n<10000; n++) {
+  for (let n = 0; n<100000; n++) {
     this.testColors.push(new Color(Math.random(), Math.random(), Math.random()));
   }
 
@@ -43,6 +43,29 @@ function GraphicManager(canvas) {
     let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
     //let mesh = meshx1;
     let mesh = meshx1.concatMesh(meshx2);
+
+    {
+      for (let q = -5; q<5; q+=0.2) {
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(1, 0, 0), new Vector3(q, 0, 0));
+          let meshRight = mesh.splitByPlane(new Vector3(-1, 0, 0), new Vector3(q, 0, 0));
+          mesh = meshLeft.concatMesh(meshRight);
+        }
+
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(0, 1, 0), new Vector3(0, q, 0));
+          let meshRight = mesh.splitByPlane(new Vector3(0, -1, 0), new Vector3(0, q, 0));
+          mesh = meshLeft.concatMesh(meshRight);
+        }
+
+        {
+          let meshLeft = mesh.splitByPlane(new Vector3(0, 0, 1), new Vector3(0, 0, q));
+          let meshRight = mesh.splitByPlane(new Vector3(0, 0, -1), new Vector3(0, 0, q));
+          mesh = meshLeft.concatMesh(meshRight);
+        }
+      }
+    }
+
     let all_poly = mesh.polygons.length;
 
     for (let n = 0; n<mesh.polygons.length; n++) {
@@ -56,6 +79,21 @@ function GraphicManager(canvas) {
     console.log(all_poly, combined_poly);
 
     this.mesh = mesh;
+
+/*    let mesh = new Mesh();
+    {
+      let poly = new Polygon(0);
+      poly.points = [new Vector3(-1, -1.5, 0), new Vector3(0, -1.5, 0), new Vector3(0, 1.5, 0), new Vector3(-1, 1.5, 0)];
+      mesh.polygons.push(poly);
+    }
+    {
+      let poly = new Polygon(1);
+      poly.points = [new Vector3(0, -2, 0), new Vector3(1, -2, 0), new Vector3(1, 2, 0), new Vector3(0, 2, 0)];
+      mesh.polygons.push(poly);
+    }
+
+    mesh = mesh.gluePolygons();
+    this.mesh = mesh;*/
   }
 }
 
@@ -83,7 +121,7 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
   let camera = new Vector3(sx*5, 0, sz*5);
   let camerax = new Vector3(sx*4, 0, sz*4);
   let up = new Vector3(0, 1, 0);
-  let to = new Vector3(-2, -2, -2);
+  let to = new Vector3(0, 0, 0);
   let projection = Matrix4.prototype.projection(45, w/h, 1, 10000, 1);
   let modelView = Matrix4.prototype.lookAt(camera, to, up);
   let rayView = Matrix4.prototype.lookAt(camera.subVector3(to), new Vector3(), up);

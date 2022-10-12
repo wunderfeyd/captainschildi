@@ -100,7 +100,6 @@ Mesh.prototype.concatMesh = function(other) {
   return mesh;
 }
 
-let xyz = 0;
 Mesh.prototype.gluePolygons = function() {
   let coords = {};
   let checklist = [];
@@ -114,7 +113,8 @@ Mesh.prototype.gluePolygons = function() {
 
   let finished = {};
   let connected = false;
-  for (let n = 0; n<max; n++) {
+
+  /*for (let n = 0; n<max; n++) {
     for (let m = 0; m<max && !finished[n]; m++) {
       if (!finished[m] && m!=n) {
         let combined = left[n].combine(left[m]);
@@ -127,6 +127,36 @@ Mesh.prototype.gluePolygons = function() {
           left.push(combined);
           left[max].ref = max;
           max++;
+          break;
+        }
+      }
+    }
+  }*/
+
+  for (let n = 0; n<max; n++) {
+    /* let q = 0;
+    for (let m = 0; m<max; m++) {
+      if (!finished[m]) {
+        q++;
+      }
+    }
+
+    console.log(n, max, max-n, "->", q);*/
+    for (let m = 0; m<max && !finished[n]; m++) {
+      if (!finished[m] && m!=n) {
+        let combined = left[n].combineCut(left[m]);
+
+        if (combined!==null) {
+          finished[n] = true;
+          finished[m] = true;
+          connected = true;
+
+          for (let c = 0; c<combined.length; c++) {
+            left.push(combined[c]);
+            left[max].ref = max;
+            max++;
+          }
+
           break;
         }
       }

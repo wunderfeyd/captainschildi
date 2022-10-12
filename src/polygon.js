@@ -213,6 +213,119 @@ Polygon.prototype.combine = function(other) {
   return null;
 }
 
+Polygon.prototype.pointOnLine = function(from, to, point) {
+  let sum = from.subVector3(to).length();
+  let seg1 = from.subVector3(point).length();
+  let seg2 = to.subVector3(point).length();
+  return Math.abs(seg1+seg2-sum)<mathEpsilon;
+}
+
+Polygon.prototype.splitByPolygon = function(polys, insided, normal, skip) {
+  for (let c0 = 0; c0<this.points.length; c0++) {
+    if (c0!=skip) {
+      let c1 = (c0+1)%this.points.length;
+      let direction = this.points[c1].subVector3(this.points[c0]).normalize();
+      let inside = direction.crossVector3(normal);
+      let outside = inside.mulScalar(-1);
+      let splitted = [];
+      let resided = [];
+      for (let s = 0; s<polys.length; s++) {
+        {
+          let a = polys[s].splitByPlane(inside, this.points[c0]);
+          if (a) {
+            splitted.push(a);
+            resided.push(insided[s]);
+          }
+        }
+
+        {
+          let a = polys[s].splitByPlane(outside, this.points[c0]);
+          if (a) {
+            splitted.push(a);
+            resided.push(false);
+          }
+        }
+      }
+
+      polys = splitted;
+      insided = resided;
+    }
+  }
+
+  return [polys, insided];
+}
+
+Polygon.prototype.combineCut = function(other) {
+  let normal = this.calculateNormal();
+  if (normal.subVector3(other.calculateNormal()).length()<mathEpsilon) {
+    for (let p0 = 0; p0<this.points.length; p0++) {
+      let p1 = (p0+1)%this.points.length;
+      for (let o0 = 0; o0<other.points.length; o0++) {
+        let o1 = (o0+1)%other.points.length;
+        if ((Polygon.prototype.pointOnLine(this.points[p1], this.points[p0], other.points[o0]) && Polygon.prototype.pointOnLine(this.points[p1], this.points[p0], other.points[o1])) || (Polygon.prototype.pointOnLine(other.points[o1], other.points[o0], this.points[p0]) && Polygon.prototype.pointOnLine(other.points[o1], other.points[o0], this.points[p1]))) {
+          let polys = [];
+          let insided = [];
+          polys.push(this);
+          insided.push(true);
+          polys.push(other);
+          insided.push(true);
+          {
+            let split = this.splitByPolygon(polys, insided, normal, p0);
+            polys = split[0];
+            insided = split[1];
+          }
+
+          {
+            let split = other.splitByPolygon(polys, insided, normal, o0);
+            polys = split[0];
+            insided = split[1];
+          }
+
+          let concat = [];
+          let final = [];
+          for (let s = 0; s<polys.length; s++) {
+            if (insided[s]) {
+              concat.push(polys[s]);
+            } else {
+              final.push(polys[s]);
+            }
+          }
+
+          if (concat.length>2) {
+            console.log("to much splits");
+          }
+
+          if (concat.length==2) {
+            let combined = concat[0].combine(concat[1]);
+            if (combined) {
+              final.push(combined);
+              let max_area = Math.max(this.area(), other.area());
+              if (combined.area()>max_area) {
+                let convex = true;
+                for (let s = 0; s<final.length && convex; s++) {
+                  if (!Polygon.prototype.checkConvexPoints(final[s].points)) {
+                    convex = false;
+                  }
+                }
+
+                if (convex) {
+                  return final;
+                } else {
+                  console.log("no convex poly");
+                }
+              }
+            }
+          }
+
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 Polygon.prototype.simplifyPoints = function(points) {
   let corrected = [];
   corrected.push(points[0]);
@@ -223,6 +336,16 @@ Polygon.prototype.simplifyPoints = function(points) {
     let p0p1 = points[p1].subVector3(points[p0]).length();
     if (cp0>0 && Math.abs(cp1-(cp0+p0p1))>mathEpsilon) {
       corrected.push(points[p0]);
+    }
+  }
+
+  if (corrected.length>1) {
+    let cp0 = corrected[0].subVector3(corrected[corrected.length-1]).length();
+    let cp1 = corrected[1].subVector3(corrected[corrected.length-1]).length();
+    let p0p1 = corrected[1].subVector3(corrected[0]).length();
+
+    if (Math.abs(cp1-(cp0+p0p1))<mathEpsilon) {
+      corrected.shift();
     }
   }
 
