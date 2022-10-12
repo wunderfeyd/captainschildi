@@ -218,12 +218,12 @@ Matrix4.prototype.identity = function() {
 
 Matrix4.prototype.lookAt = function(position, center, up) {
   let direction = center.subVector3(position).normalize();
-  let cross = up.crossVector3(direction).normalize();
+  let cross = direction.crossVector3(up).normalize();
   let side = cross.crossVector3(direction);
   let mat = new Matrix4();
-  mat.c0 = new Vector4(cross.c0, cross.c1, cross.c2, cross.dotVector3(position));
-  mat.c1 = new Vector4(side.c0, side.c1, side.c2, side.dotVector3(position));
-  mat.c2 = new Vector4(direction.c0, direction.c1, direction.c2, direction.dotVector3(position));
+  mat.c0 = new Vector4(-cross.c0, -cross.c1, -cross.c2, cross.dotVector3(position));
+  mat.c1 = new Vector4(-side.c0, -side.c1, -side.c2, side.dotVector3(position));
+  mat.c2 = new Vector4(-direction.c0, -direction.c1, -direction.c2, direction.dotVector3(position));
   mat.c3 = new Vector4(0, 0, 0, 1);
   return mat;
 }

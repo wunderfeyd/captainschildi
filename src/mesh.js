@@ -100,6 +100,53 @@ Mesh.prototype.concatMesh = function(other) {
   return mesh;
 }
 
+let xyz = 0;
+Mesh.prototype.gluePolygons = function() {
+  let coords = {};
+  let checklist = [];
+  let left = [];
+  let max = 0;
+  for (let n = 0; n<this.polygons.length; n++) {
+    left.push(this.polygons[n]);
+    left[max].ref = max;
+    max++;
+  }
+
+  let finished = {};
+  let connected = false;
+  for (let n = 0; n<max; n++) {
+    for (let m = 0; m<max && !finished[n]; m++) {
+      if (!finished[m] && m!=n) {
+        let combined = left[n].combine(left[m]);
+
+        if (combined!==null) {
+          finished[n] = true;
+          finished[m] = true;
+          connected = true;
+
+          left.push(combined);
+          left[max].ref = max;
+          max++;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!connected) {
+    return this;
+  }
+
+  let done = new Mesh();
+  for (let n = 0; n<max; n++) {
+    if (!finished[n]) {
+      done.polygons.push(left[n]);
+    }
+  }
+
+  return done;
+}
+
 Mesh.prototype.invertNormals = function(other) {
   let mesh = new Mesh();
   for (let n = 0; n<this.polygons.length; n++) {

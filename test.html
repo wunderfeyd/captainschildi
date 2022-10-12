@@ -14,6 +14,8 @@ let am;
 let gm;
 let canvas;
 let body;
+let mouseX = -1;
+let mouseY = -1;
 
 function init() {
   am = new AudioManager();
@@ -22,6 +24,7 @@ function init() {
   samples.push(am.load_sample("pad_wavetable.wav", "#f00"));
   samples.push(am.load_sample("bass_wave1.wav", "#0f0"));
 
+  document.onmousemove = mousemove;
   body = document.getElementById("body");
   canvas = document.getElementById("graphics");
   gm = new GraphicManager(canvas);
@@ -39,7 +42,12 @@ function init() {
 function frame(time) {
   canvas.width = document.documentElement.clientWidth;
   canvas.height = document.documentElement.clientHeight;
-  gm.clear();
+  gm.clear(null, mouseX, mouseY);
+}
+
+function mousemove(e) {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
 }
 
 </script>

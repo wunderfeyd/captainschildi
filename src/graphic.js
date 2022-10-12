@@ -19,37 +19,13 @@ function GraphicManager(canvas) {
     let shader2 = this.compileShader(shader2Res.data, this.gl.FRAGMENT_SHADER);
     this.program1 = this.compileProgram([shader1, shader2]);
   }).bind(this));
-}
 
-GraphicManager.prototype.pump = function() {
-  window.requestAnimationFrame(this.pump.bind(this));
-  if (this.callback) {
-    this.callback(performance.now()/1000);
+  this.testColors = [];
+  for (let n = 0; n<10000; n++) {
+    this.testColors.push(new Color(Math.random(), Math.random(), Math.random()));
   }
-}
 
-GraphicManager.prototype.setCallback = function(callback) {
-  this.callback = callback;
-}
-
-// Testing
-GraphicManager.prototype.clear = function(color) {
-  let w = canvas.width;
-  let h = canvas.height;
-  this.gl.viewport(0, 0, w, h);
-  let t = performance.now()/1000;
-  let sx = Math.sin(t);
-  let sz = Math.cos(t);
-  let camera = new Vector3(sx*10, -5, sz*10);
-  let up = new Vector3(0, 1, 0);
-  let to = new Vector3(0, 0, 0);
-  let projection = Matrix4.prototype.projection(45, w/h, 1, 10000, 1);
-  let modelView = Matrix4.prototype.lookAt(camera, to, up);
-
-  this.gl.clearColor(0.0, 0.0, 1.0, 1.0);
-  this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-
-  if (this.program1!=null) {
+  {
     let mesh1 = Mesh.prototype.createBox();
     let mesh2 = Mesh.prototype.createSphere(16, 16);
 
@@ -65,7 +41,103 @@ GraphicManager.prototype.clear = function(color) {
 
     let meshx1 = mesh1.cutMesh(mesh2, false);
     let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
+    //let mesh = meshx1;
     let mesh = meshx1.concatMesh(meshx2);
+    let all_poly = mesh.polygons.length;
+
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      if (!Polygon.prototype.checkConvexPoints(mesh.polygons[n].points)) {
+        console.log("non convex input");
+      }
+    }
+
+    mesh = mesh.gluePolygons();
+    let combined_poly = mesh.polygons.length;
+    console.log(all_poly, combined_poly);
+
+    this.mesh = mesh;
+  }
+}
+
+GraphicManager.prototype.pump = function() {
+  window.requestAnimationFrame(this.pump.bind(this));
+  if (this.callback) {
+    this.callback(performance.now()/1000);
+  }
+}
+
+GraphicManager.prototype.setCallback = function(callback) {
+  this.callback = callback;
+}
+
+// Testing
+GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
+  let w = canvas.width;
+  let h = canvas.height;
+  this.gl.viewport(0, 0, w, h);
+  let t = performance.now()/10000;
+  let sx = Math.sin(t);
+  let sz = Math.cos(t);
+  let ssx = Math.sin(-t);
+  let ssz = Math.cos(-t);
+  let camera = new Vector3(sx*5, 0, sz*5);
+  let camerax = new Vector3(sx*4, 0, sz*4);
+  let up = new Vector3(0, 1, 0);
+  let to = new Vector3(-2, -2, -2);
+  let projection = Matrix4.prototype.projection(45, w/h, 1, 10000, 1);
+  let modelView = Matrix4.prototype.lookAt(camera, to, up);
+  let rayView = Matrix4.prototype.lookAt(camera.subVector3(to), new Vector3(), up);
+  rayView.c0.c3 = 0;
+  rayView.c1.c3 = 0;
+  rayView.c2.c3 = 0;
+
+  this.gl.clearColor(0.0, 0.0, 1.0, 1.0);
+  this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+  if (this.program1!=null) {
+    let mesh = this.mesh;
+
+    let ray_end;
+    let ray_start;
+    let ray_test;
+
+    {
+      let mz = 10000;
+      let mx = ((mouseX-w*0.5)/w)/((projection.c0.c0*0.5)/(1.0+mz));
+      let my = ((mouseY-h*0.5)/h)/((projection.c1.c1*-0.5)/(1.0+mz));
+      ray_end = camera.addVector3(rayView.c2.mulScalar(-mz)).addVector3(rayView.c0.mulScalar(mx)).addVector3(rayView.c1.mulScalar(my));
+    }
+
+    {
+      ray_start = camera.addVector3(rayView.c2.mulScalar(1.0));
+      ray_test = camera.addVector3(rayView.c2.mulScalar(-1.0));
+    }
+
+    let selected_poly = null;
+    let min_dist = 100000.0;
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      let dist = mesh.polygons[n].intersectingLine(ray_start, ray_end);
+      if (dist!==null && dist<min_dist) {
+        selected_poly = mesh.polygons[n].ref;
+        min_dist = dist;
+      }
+    }
+
+    if (selected_poly!=this.selected_poly) {
+      this.selected_poly = selected_poly;
+      console.log(selected_poly);
+    }
+
+    let mesh1 = Mesh.prototype.createSphere(8, 8);
+    let matrix = Matrix4.prototype.identity();
+    matrix = matrix.scaleVector3(new Vector3(0.25, 0.25, 0.25));
+    matrix = matrix.translateVector3(to);
+    mesh1 = mesh1.mulMatrix4(matrix);
+
+    mesh = mesh.concatMesh(mesh1);
+
+    //console.log(ray);
+
     //let mesh = meshx1;
     //let mesh = mesh1.concatMesh(mesh2);
 
@@ -105,7 +177,7 @@ GraphicManager.prototype.clear = function(color) {
     mesh = mesh.concatMesh(meshx);
     */
 
-    {
+    /*{
       for (let q = -100; q<100; q+=50) {
         {
           let meshLeft = mesh.splitByPlane(new Vector3(1, 0, 0), new Vector3(q, 0, 0));
@@ -125,11 +197,15 @@ GraphicManager.prototype.clear = function(color) {
           mesh = meshLeft.concatMesh(meshRight);
         }
       }
-    }
+    }*/
 
     let triangles = [];
     for (let n = 0; n<mesh.polygons.length; n++) {
       let poly_tri = mesh.polygons[n].triangleFan();
+      for (let m = 0; m<poly_tri.length; m++) {
+        poly_tri[m].ref = mesh.polygons[n].ref;
+      }
+
       triangles = triangles.concat(poly_tri);
     }
 
@@ -146,9 +222,30 @@ GraphicManager.prototype.clear = function(color) {
 
       let c = (n+1)/triangles.length;
       if (!intersecting) {
-        colors_js.push(c, c, c, 1);
-        colors_js.push(c, c, c, 1);
-        colors_js.push(c, c, c, 1);
+        let r = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c0;
+        let g = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c1;
+        let b = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c2;
+        if (triangles[n].ref==selected_poly) {
+          r = 255;
+          b = 255;
+          g = 0;
+        }
+
+        if (triangles[n].ref==87 || triangles[n].ref==88) {
+          if ((Math.floor(t*10)%2)==0) {
+            r = 255;
+            b = 255;
+            g = 127;
+          } else {
+            r = 255;
+            b = 255;
+            g = 0;
+          }
+        }
+
+        colors_js.push(r, g, b, 1);
+        colors_js.push(r, g, b, 1);
+        colors_js.push(r, g, b, 1);
       } else {
         colors_js.push(c, 0, c, 1);
         colors_js.push(c, 0, c, 1);
@@ -185,7 +282,7 @@ GraphicManager.prototype.clear = function(color) {
 
     this.gl.enable(this.gl.DEPTH_TEST);
     this.gl.enable(this.gl.CULL_FACE);
-    this.gl.cullFace(this.gl.BACK);
+    this.gl.cullFace(this.gl.FRONT);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, triangles.length*3);
 
     this.gl.deleteBuffer(bufferCoords);
