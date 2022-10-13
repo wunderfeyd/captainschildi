@@ -416,3 +416,26 @@ let randomFloat = function(from, to) {
   let maxInt = 65536.0*65536.0;
   return ((values[0]+(values[1]/maxInt))/maxInt)*diff+from;
 }
+
+let fitNormals = [
+  [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)],
+  [new Vector3(0, 1, 0), new Vector3(0, 0, 1), new Vector3(1, 0, 0)],
+  [new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(0, 1, 0)],
+  [new Vector3(-1, 0, 0), new Vector3(0, -1, 0), new Vector3(0, 0, -1)],
+  [new Vector3(0, -1, 0), new Vector3(0, 0, -1), new Vector3(-1, 0, 0)],
+  [new Vector3(0, 0, -1), new Vector3(-1, 0, 0), new Vector3(0, -1, 0)]
+];
+
+let fitNormal = function(normal) {
+  let best = null;
+  let result = 0;
+  for (let n = 0; n<fitNormals.length; n++) {
+    let tmp = fitNormals[n][0].dotVector3(normal);
+    if (tmp>result) {
+      result = tmp;
+      best = fitNormals[n];
+    }
+  }
+
+  return best;
+}

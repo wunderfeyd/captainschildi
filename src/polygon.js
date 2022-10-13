@@ -47,6 +47,17 @@ Polygon.prototype.splitByPlane = function(normal, position) {
   return poly;
 }
 
+Polygon.prototype.coplanar = function(normal, position) {
+  for (let p0 = 0; p0<this.points.length; p0++) {
+    let dist = this.points[p0].subVector3(position).dotVector3(normal);
+    if (Math.abs(dist)>mathEpsilon) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 Polygon.prototype.calculateNormal = function() {
   return Polygon.prototype.calculateNormalPoints(this.points);
 }

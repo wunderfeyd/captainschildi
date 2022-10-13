@@ -2,8 +2,12 @@
 
 function GraphicManager(canvas) {
   this.program1 = null;
+  this.lightmapTextureSize = 1024;
+  this.lightmapScale = 1/(this.lightmapTextureSize/16);
+  this.textureAtlas = new TextureAtlas(this.lightmapTextureSize, this.lightmapTextureSize);
+  this.bsp = new BSP();
 
-  this.gl = canvas.getContext("webgl");
+  this.gl = canvas.getContext("webgl2");
   if (this.gl===null) {
     console.log("no webgl");
     return;
@@ -26,26 +30,50 @@ function GraphicManager(canvas) {
   }
 
   {
-    let mesh1 = Mesh.prototype.createBox();
-    let mesh2 = Mesh.prototype.createSphere(16, 16);
-
     let matrix = Matrix4.prototype.identity();
+    let mesh1 = Mesh.prototype.createBox();
+
     matrix = matrix.scaleVector3(new Vector3(2, 2, 2));
 
     matrix = matrix.translateVector3(new Vector3(0, 0, 0));
     mesh1 = mesh1.mulMatrix4(matrix);
 
+    let mesh2 = Mesh.prototype.createSphere(16, 16);
     matrix = matrix.scaleVector3(new Vector3(1.25, 1.25, 1.25));
     matrix = matrix.translateVector3(new Vector3(0, 0, 0));
     mesh2 = mesh2.mulMatrix4(matrix);
 
     let meshx1 = mesh1.cutMesh(mesh2, false);
     let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
+
+    let mesh3 = Mesh.prototype.createBox();
+    matrix = matrix.scaleVector3(new Vector3(5, 0.5, 5));
+    matrix = matrix.translateVector3(new Vector3(0, 3.0, 0));
+    mesh3 = mesh3.mulMatrix4(matrix);
+
     //let mesh = meshx1;
     let mesh = meshx1.concatMesh(meshx2);
+    //let mesh = mesh1;
+    //mesh = mesh.concatMesh(mesh3);
+    mesh = mesh.concatMesh(mesh3);
+    //let mesh = mesh1.concatMesh(mesh3);
+    //mesh = mesh3;
 
-    {
-      for (let q = -5; q<5; q+=0.2) {
+    let all_poly = mesh.polygons.length;
+
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      if (!Polygon.prototype.checkConvexPoints(mesh.polygons[n].points)) {
+        console.log("non convex input");
+      }
+    }
+
+    mesh = mesh.gluePolygons();
+
+    let combined_poly = mesh.polygons.length;
+    console.log(all_poly, combined_poly);
+
+    /*{
+      for (let q = -2; q<2; q+=0.2) {
         {
           let meshLeft = mesh.splitByPlane(new Vector3(1, 0, 0), new Vector3(q, 0, 0));
           let meshRight = mesh.splitByPlane(new Vector3(-1, 0, 0), new Vector3(q, 0, 0));
@@ -64,19 +92,7 @@ function GraphicManager(canvas) {
           mesh = meshLeft.concatMesh(meshRight);
         }
       }
-    }
-
-    let all_poly = mesh.polygons.length;
-
-    for (let n = 0; n<mesh.polygons.length; n++) {
-      if (!Polygon.prototype.checkConvexPoints(mesh.polygons[n].points)) {
-        console.log("non convex input");
-      }
-    }
-
-    mesh = mesh.gluePolygons();
-    let combined_poly = mesh.polygons.length;
-    console.log(all_poly, combined_poly);
+    }*/
 
     this.mesh = mesh;
 
@@ -94,7 +110,86 @@ function GraphicManager(canvas) {
 
     mesh = mesh.gluePolygons();
     this.mesh = mesh;*/
+
+    this.triangles = new Mesh();
+    let texarray = 0;
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      let v = mesh.polygons[n];
+
+      let normal = v.calculateNormal();
+      let fit = fitNormal(normal);
+
+      // fix lightmaps
+      let extra = 100000.0;
+      let minX = extra;
+      let minY = extra;
+      for (let p = 0; p<v.points.length; p++) {
+        let p0 = v.points[p];
+        let x = fit[1].dotVector3(p0)*this.lightmapScale;
+        let y = fit[2].dotVector3(p0)*this.lightmapScale;
+        minX = Math.min(x, minX);
+        minY = Math.min(y, minY);
+        p0.texmap = new Vector2(x, y);
+      }
+
+      // adjust to next pixel
+      let frac = 1/this.lightmapTextureSize;
+      minX = Math.floor(minX/frac)*frac;
+      minY = Math.floor(minY/frac)*frac;
+      let maxX = 0;
+      let maxY = 0;
+      for (let p = 0; p<v.points.length; p++) {
+        let p0 = v.points[p];
+        p0.texmap.c0 -= minX;
+        p0.texmap.c1 -= minY;
+        maxX = Math.max(p0.texmap.c0, maxX);
+        maxY = Math.max(p0.texmap.c1, maxY);
+        p0.texmap.c0 += frac;
+        p0.texmap.c1 += frac;
+      }
+
+      maxX = Math.ceil(maxX/frac)+2;
+      maxY = Math.ceil(maxY/frac)+2;
+      texarray += maxX*maxY;
+      v.lightmap = new Array();
+      for (let fill = 0; fill<maxX*maxY; fill++) {
+        v.lightmap.push(new Color());
+      }
+
+      v.lightmapNX = fit[1];
+      v.lightmapNY = fit[2];
+      v.lightmapX = -minX+frac;
+      v.lightmapY = -minY+frac;
+      v.lightmapWidth = maxX;
+      v.lightmapHeight = maxY;
+
+      let atlas = this.textureAtlas.allocate(maxX, maxY);
+      v.lightmapXAtlas = atlas[0];
+      v.lightmapYAtlas = atlas[1];
+      console.log(n, maxX, maxY, texarray, atlas);
+    }
+
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      let poly_tri = mesh.polygons[n].triangleFan();
+      for (let m = 0; m<poly_tri.length; m++) {
+
+        poly_tri[m].ref = mesh.polygons[n];
+      }
+
+      this.triangles.polygons = this.triangles.polygons.concat(poly_tri);
+    }
+
+    this.bsp.fromMesh(this.mesh);
+    console.log(this.bsp.trace(new Vector3(0, -10, 0), new Vector3(0, 10, 0)));
   }
+
+  this.radianceTex0 = this.gl.createTexture();
+  this.gl.bindTexture(this.gl.TEXTURE_2D, this.radianceTex0);
+  this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+  this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+  this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAX_LEVEL, 0);
+  this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+  this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
 }
 
 GraphicManager.prototype.pump = function() {
@@ -156,7 +251,7 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
     for (let n = 0; n<mesh.polygons.length; n++) {
       let dist = mesh.polygons[n].intersectingLine(ray_start, ray_end);
       if (dist!==null && dist<min_dist) {
-        selected_poly = mesh.polygons[n].ref;
+        selected_poly = mesh.polygons[n];
         min_dist = dist;
       }
     }
@@ -164,6 +259,62 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
     if (selected_poly!=this.selected_poly) {
       this.selected_poly = selected_poly;
       console.log(selected_poly);
+    }
+
+    for (let rays = 0; rays<10000; rays++) {
+      let lightsrc = new Vector3(0, -4, 0);
+      let direction = Vector3.prototype.random();
+      let lightdest = lightsrc.addVector3(direction.mulScalar(10000));
+      let minDist = null;
+      let minPoly = null;
+      let bspres = this.bsp.trace(lightsrc, lightdest);
+      if (bspres!==null) {
+        let dist = bspres.intersectingLine(lightsrc, lightdest);
+        if (dist!==null && (minDist===null || dist<minDist)) {
+          minPoly = bspres;
+          minDist = dist;
+        }
+      }
+
+      /*for (let n = 0; n<mesh.polygons.length; n++) {
+        let dist = mesh.polygons[n].intersectingLine(lightsrc, lightdest);
+        if (dist!==null && (minDist===null || dist<minDist)) {
+          minPoly = mesh.polygons[n];
+          minDist = dist;
+        }
+      }
+
+      let bspres = this.bsp.trace(lightsrc, lightdest);
+      if (bspres!=minPoly) {
+        console.log("urgs");
+      }*/
+
+      /*if ((bspres===null && minPoly!==null) || (bspres!==null && minPoly===null)) {
+        console.log(bspres, minPoly);
+      } else {
+        if (bspres!==null && minPoly!==null) {
+          console.log("same", lightsrc.subVector3(minPoly.points[0]).dotVector3(minPoly.calculateNormal()));
+          for (let x in bspres) {
+            //console.log(bspres[x], minPoly);
+            if (minPoly===bspres[x]) {
+              console.log("yep");
+            }
+          }
+        }
+      }*/
+
+      if (minPoly) {
+        let hit = lightsrc.addVector3(direction.mulScalar(minDist));
+        let frac = 1/this.lightmapTextureSize;
+        let x = Math.floor((minPoly.lightmapNX.dotVector3(hit)*this.lightmapScale+minPoly.lightmapX)/frac);
+        let y = Math.floor((minPoly.lightmapNY.dotVector3(hit)*this.lightmapScale+minPoly.lightmapY)/frac);
+        x = Math.max(Math.min(minPoly.lightmapWidth-1, x), 0);
+        y = Math.max(Math.min(minPoly.lightmapHeight-1, y), 0);
+        let p = y*minPoly.lightmapWidth+x;
+        minPoly.lightmap[p].c0 = 1;
+        minPoly.lightmap[p].c1 = 1;
+        minPoly.lightmap[p].c2 = 1;
+      }
     }
 
     let mesh1 = Mesh.prototype.createSphere(8, 8);
@@ -237,62 +388,72 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
       }
     }*/
 
-    let triangles = [];
-    for (let n = 0; n<mesh.polygons.length; n++) {
-      let poly_tri = mesh.polygons[n].triangleFan();
-      for (let m = 0; m<poly_tri.length; m++) {
-        poly_tri[m].ref = mesh.polygons[n].ref;
-      }
-
-      triangles = triangles.concat(poly_tri);
-    }
-
     let coords_js = [];
     let colors_js = [];
+    let texmaps_js = [];
 
-    for (let n = 0; n<triangles.length; n++) {
-      let tri = triangles[n];
+    for (let n = 0; n<this.triangles.polygons.length; n++) {
+      let tri = this.triangles.polygons[n];
       coords_js.push(tri.points[0].c0, tri.points[0].c1, tri.points[0].c2);
       coords_js.push(tri.points[1].c0, tri.points[1].c1, tri.points[1].c2);
       coords_js.push(tri.points[2].c0, tri.points[2].c1, tri.points[2].c2);
-      let intersecting = false; //polys[0].intersectingPolygonBoth(polys[1]);
-      //let intersecting = polys[0].intersectingLine(new Vector3(0, 0, -5), new Vector3(0, 0, 10));
 
-      let c = (n+1)/triangles.length;
-      if (!intersecting) {
-        let r = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c0;
-        let g = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c1;
-        let b = triangles[n].ref==null?0:this.testColors[triangles[n].ref].c2;
-        if (triangles[n].ref==selected_poly) {
-          r = 255;
-          b = 255;
-          g = 0;
+      let r = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c0;
+      let g = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c1;
+      let b = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c2;
+      if (tri.ref===selected_poly) {
+        r = 255;
+        b = 255;
+        g = 0;
+      }
+
+      for (let k = 0; k<tri.points.length; k++) {
+        if (tri.points[k].radiance) {
+          colors_js.push(r, g, b, 1);
+        } else {
+          colors_js.push(r/4, g/4, b/4, 1);
         }
 
-        if (triangles[n].ref==87 || triangles[n].ref==88) {
-          if ((Math.floor(t*10)%2)==0) {
-            r = 255;
-            b = 255;
-            g = 127;
-          } else {
-            r = 255;
-            b = 255;
-            g = 0;
-          }
+        if (tri.points[k].texmap!==null) {
+          texmaps_js.push(tri.points[k].texmap.c0+tri.ref.lightmapXAtlas/this.lightmapTextureSize, tri.points[k].texmap.c1+tri.ref.lightmapYAtlas/this.lightmapTextureSize);
+        } else {
+          texmaps_js.push(0, 0);
         }
-
-        colors_js.push(r, g, b, 1);
-        colors_js.push(r, g, b, 1);
-        colors_js.push(r, g, b, 1);
-      } else {
-        colors_js.push(c, 0, c, 1);
-        colors_js.push(c, 0, c, 1);
-        colors_js.push(c, 0, c, 1);
       }
     }
 
     let coords = Float32Array.from(coords_js);
     let colors = Float32Array.from(colors_js);
+    let texmaps = Float32Array.from(texmaps_js);
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.radianceTex0);
+    let pixels_js = [];
+    for (let y = 0; y<this.lightmapTextureSize; y++) {
+      for (let x = 0; x<this.lightmapTextureSize; x++) {
+        let c = ((x^y)&1)*255;
+        pixels_js.push(0, 0, 0, 255);
+      }
+    }
+
+    for (let n = 0; n<mesh.polygons.length; n++) {
+      let v = mesh.polygons[n];
+      if (v.lightmap) {
+        let q = 0;
+        for (let y = 0; y<v.lightmapHeight; y++) {
+          let p = ((y+v.lightmapYAtlas)*this.lightmapTextureSize+v.lightmapXAtlas)*4;
+          for (let x = 0; x<v.lightmapWidth; x++) {
+            pixels_js[p+0] = v.lightmap[q].c0*255;
+            pixels_js[p+1] = v.lightmap[q].c1*255;
+            pixels_js[p+2] = v.lightmap[q].c2*255;
+            p+=4;
+            q++;
+          }
+        }
+      }
+    }
+
+    let pixels = Uint8Array.from(pixels_js);
+    this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.lightmapTextureSize, this.lightmapTextureSize, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, pixels, 0);
 
     const bufferCoords = this.gl.createBuffer();
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, bufferCoords);
@@ -302,9 +463,13 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, bufferColors);
     this.gl.bufferData(this.gl.ARRAY_BUFFER, colors, this.gl.STATIC_DRAW);
 
+    const bufferTexmaps = this.gl.createBuffer();
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, bufferTexmaps);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, texmaps, this.gl.STATIC_DRAW);
+
     this.gl.useProgram(this.program1.id);
     //this.gl.enableVertexAttribArray(this.program1.location.color);
-    //this.gl.Uniform1i(simple->locations[(size_t)shader::LOCATION::tex0], 0);
+    this.gl.uniform1i(this.program1.location.tex0, 0);
     this.gl.uniformMatrix4fv(this.program1.location.projection, false, projection.asTransposedArray());
     this.gl.uniformMatrix4fv(this.program1.location.model, false, modelView.asTransposedArray());
     //this.gl.enableVertexAttribArray(this.program1.location.color);
@@ -318,13 +483,22 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, bufferColors);
     this.gl.vertexAttribPointer(this.program1.location.color, 4, this.gl.FLOAT, false, 0, 0);
 
+    this.gl.enableVertexAttribArray(this.program1.location.texmap);
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, bufferTexmaps);
+    this.gl.vertexAttribPointer(this.program1.location.texmap, 2, this.gl.FLOAT, false, 0, 0);
+
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.radianceTex0);
+
     this.gl.enable(this.gl.DEPTH_TEST);
     this.gl.enable(this.gl.CULL_FACE);
     this.gl.cullFace(this.gl.FRONT);
-    this.gl.drawArrays(this.gl.TRIANGLES, 0, triangles.length*3);
+
+    this.gl.drawArrays(this.gl.TRIANGLES, 0, this.triangles.polygons.length*3);
 
     this.gl.deleteBuffer(bufferCoords);
     this.gl.deleteBuffer(bufferColors);
+    this.gl.deleteBuffer(bufferTexmaps);
   }
 }
 

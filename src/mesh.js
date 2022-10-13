@@ -87,6 +87,21 @@ Mesh.prototype.splitByPlane = function(direction, position) {
   return mesh;
 }
 
+Mesh.prototype.removeCoplanar = function(direction, position) {
+  let coplanar = [];
+  let n = 0;
+  while (n<this.polygons.length) {
+    if (this.polygons[n].coplanar(direction, position)) {
+      coplanar.push(this.polygons[n]);
+      this.polygons.splice(n, 1);
+    } else {
+      n++;
+    }
+  }
+
+  return coplanar;
+}
+
 Mesh.prototype.concatMesh = function(other) {
   let mesh = new Mesh();
   for (let n = 0; n<this.polygons.length; n++) {
@@ -100,6 +115,12 @@ Mesh.prototype.concatMesh = function(other) {
   return mesh;
 }
 
+Mesh.prototype.concatCutMesh = function(other) {
+  let mesh1 = this.cutMesh(other, false);
+  let mesh2 = other.cutMesh(this, false);
+  return mesh1.concatMesh(mesh2);;
+}
+
 Mesh.prototype.gluePolygons = function() {
   let coords = {};
   let checklist = [];
@@ -107,7 +128,6 @@ Mesh.prototype.gluePolygons = function() {
   let max = 0;
   for (let n = 0; n<this.polygons.length; n++) {
     left.push(this.polygons[n]);
-    left[max].ref = max;
     max++;
   }
 
@@ -153,7 +173,6 @@ Mesh.prototype.gluePolygons = function() {
 
           for (let c = 0; c<combined.length; c++) {
             left.push(combined[c]);
-            left[max].ref = max;
             max++;
           }
 
@@ -236,4 +255,24 @@ Mesh.prototype.mulMatrix4 = function(matrix) {
   }
 
   return mesh;
+}
+
+Mesh.prototype.raycast = function(from, to) {
+  let direction = to.subVector3(from).normalize();
+  let min_dist = to.subVector3(from).length();
+  let poly = null;
+  for (let n = 0; n<this.polygons.length; n++) {
+    let dist = this.polygons[n].intersectingLine(from, to);
+    if (dist!==null && dist<min_dist) {
+      if (this.polygons[n].calculateNormal().dotVector3(direction)<0) {
+        poly = n;
+      } else {
+        poly = null;
+      }
+
+      min_dist = dist;
+    }
+  }
+
+  return poly;
 }
