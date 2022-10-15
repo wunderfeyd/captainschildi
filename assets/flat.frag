@@ -47,5 +47,5 @@ void main() {
     }
   }*/
 
-  gl_FragColor = vertex_color*texture2D(tex0, vertex_texmap);
+  gl_FragColor = vec4(vertex_color.xyz*texture2D(tex0, vertex_texmap).xyz, 1.0);
 }

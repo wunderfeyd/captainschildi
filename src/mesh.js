@@ -259,20 +259,26 @@ Mesh.prototype.mulMatrix4 = function(matrix) {
 
 Mesh.prototype.raycast = function(from, to) {
   let direction = to.subVector3(from).normalize();
-  let min_dist = to.subVector3(from).length();
+  let minDist = to.subVector3(from).length();
   let poly = null;
   for (let n = 0; n<this.polygons.length; n++) {
     let dist = this.polygons[n].intersectingLine(from, to);
-    if (dist!==null && dist<min_dist) {
+    if (dist!==null && dist<minDist) {
       if (this.polygons[n].calculateNormal().dotVector3(direction)<0) {
         poly = n;
       } else {
         poly = null;
       }
 
-      min_dist = dist;
+      minDist = dist;
     }
   }
 
   return poly;
+}
+
+Mesh.prototype.precalculateNormals = function() {
+  for (let n = 0; n<this.polygons.length; n++) {
+    this.polygons[n].normal = this.polygons[n].calculateNormal();
+  }
 }

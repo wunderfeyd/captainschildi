@@ -9,6 +9,7 @@ function polygonFromPoints(ref, points) {
 function Polygon(ref) {
   this.points = [];
   this.ref = ref;
+  this.normal = null;
 }
 
 Polygon.prototype.splitByPlane = function(normal, position) {
@@ -59,6 +60,10 @@ Polygon.prototype.coplanar = function(normal, position) {
 }
 
 Polygon.prototype.calculateNormal = function() {
+  if (this.normal!==null) {
+    return this.normal;
+  }
+
   return Polygon.prototype.calculateNormalPoints(this.points);
 }
 
@@ -184,6 +189,15 @@ Polygon.prototype.area = function() {
   }
 
   return area;
+}
+
+Polygon.prototype.center = function() {
+  let center = new Vector3();
+  for (let p0 = 0; p0<this.points.length; p0++) {
+    center = center.addVector3(this.points[p0]);
+  }
+
+  return center.divScalar(this.points.length);
 }
 
 Polygon.prototype.combine = function(other) {
@@ -386,4 +400,22 @@ Polygon.prototype.mulMatrix4 = function(matrix) {
   }
 
   return poly;
+}
+
+Polygon.prototype.randomPoint = function() {
+  let p = randomInt32(0, this.points.length-2);
+  let p0 = this.points[p+0];
+  let p1 = this.points[p+1];
+  let p2 = this.points[this.points.length-1];
+  let uScale = randomFloat(0, 1);
+  let vScale = randomFloat(0, 1);
+  if (uScale+vScale>1.0) {
+    uScale = 1.0-uScale;
+    vScale = 1.0-vScale;
+  }
+
+  let u = p1.subVector3(p0).mulScalar(uScale);
+  let v = p2.subVector3(p0).mulScalar(vScale);
+  let point = p0.addVector3(u).addVector3(v);
+  return point;
 }

@@ -410,11 +410,28 @@ Quaternion.prototype.normalize = function() {
 }
 
 let randomFloat = function(from, to) {
+  let diff = to-from;
+  if (diff==0) {
+    return from;
+  }
+
   let values = new Uint32Array(2);
   window.crypto.getRandomValues(values);
-  let diff = to-from;
   let maxInt = 65536.0*65536.0;
   return ((values[0]+(values[1]/maxInt))/maxInt)*diff+from;
+}
+
+let randomInt32RoundUp = new Uint32Array(1);
+let randomInt32 = function(from, to) {
+  if (from==to) {
+    return from;
+  }
+
+  let values = new Uint32Array(2);
+  window.crypto.getRandomValues(values);
+  values[0] += randomInt32RoundUp[0];
+  randomInt32RoundUp[0] = values[0];
+  return (values[0]%(to-from))+from;
 }
 
 let fitNormals = [

@@ -2,6 +2,7 @@
 
 function BSP() {
   this.root = null;
+  this.bspcheck = 0;
 }
 
 BSP.prototype.fromMesh = function(mesh) {
@@ -75,87 +76,81 @@ BSP.prototype.splitMesh = function(mesh, parent) {
     let left = mesh.splitByPlane(normal, position);
     let right = mesh.splitByPlane(normal.mulScalar(-1), position);
 
-    //console.log("mindiff2", left.polygons.length, right.polygons.length);
     let node = [null, null, null, normal, position, parent];
-    node[1] = this.splitMesh(left, node);
-    node[2] = this.splitMesh(right, node);
+    node[0] = this.splitMesh(left, node);
+    node[1] = this.splitMesh(right, node);
     return node;
   } else {
     let innerUpdate = [];
     for (let n = 0; n<mesh.polygons.length; n++) {
-      innerUpdate.push(mesh.polygons[n]);
+      innerUpdate.push(mesh.polygons[n].ref);
     }
 
-    return [innerUpdate, null, null, null, null, parent];
+    return [null, null, innerUpdate, null, null, parent];
   }
 }
 
 BSP.prototype.trace = function(start, end) {
+  this.bspcheck++;
   //console.log("tracestart");
-  let direction = end.subVector3(start).normalize();
   let stack = [[this.root, start, end]];
+  var bestPoly = null;
+  var bestDist = null;
   while (stack.length>0) {
     let test = stack.shift();
     let node = test[0];
-    let from = test[1];
-    let to = test[2];
-    if (node[0]!==null) {
-      var bestPoly = null;
-      var bestDist = null;
-      for (let n = 0; n<node[0].length; n++) {
-        let dist = node[0][n].intersectingLine(from, to);
-        if (dist!==null && (bestDist===null || dist<bestDist)) {
-          bestDist = dist;
-          bestPoly = node[0][n];
-        }
-      }
+    let fromLeft = test[1];
+    let fromRight = test[1];
+    let toLeft = test[2];
+    let toRight = test[2];
+    if (node[2]!==null) {
+      for (let n = 0; n<node[2].length; n++) {
+        if (node[2][n].bspcheck===null || node[2][n].bspcheck!=this.bspcheck) {
+          node[2][n].bspcheck = this.bspcheck;
 
-      if (bestPoly!==null) {
-        return bestPoly.ref;
+          let dist = node[2][n].intersectingLine(start, end);
+          if (dist!==null && (bestDist===null || dist<bestDist)) {
+            bestDist = dist;
+            bestPoly = node[2][n];
+          }
+        }
       }
 
       continue;
     }
 
-    let line = to.subVector3(from);
-    let length = line.length();
-    if (length<mathEpsilon) {
-      //continue;
+    let line = toRight.subVector3(fromLeft);
+    if (bestDist!=null) {
+      let length = fromLeft.subVector3(start).length();
+      if (length>bestDist+mathEpsilon) {
+        continue;
+      }
     }
 
-    let fromDist = from.subVector3(node[4]).dotVector3(node[3]);
-    let toDist = to.subVector3(node[4]).dotVector3(node[3]);
+    let fromDist = fromLeft.subVector3(node[4]).dotVector3(node[3]);
+    let toDist = toRight.subVector3(node[4]).dotVector3(node[3]);
+    let side = (fromDist<0)?1:0;
+    let advance = false;
     if ((fromDist<0 && toDist>=0) || (fromDist>=0 && toDist<0)) {
-      let hit = line.mulScalar(Math.abs(fromDist)/(Math.abs(fromDist)+Math.abs(toDist))).addVector3(from);
-      let diff = hit.subVector3(node[4]).dotVector3(node[3]);
-      if (diff>Math.abs(mathEpsilon)) {
-        console.log("bla");
-      }
-
-      if (toDist<0) {
-        stack.unshift([node[2], hit, to]);
-      }
-
-      if (toDist>=0) {
-        stack.unshift([node[1], hit, to]);
-      }
-
-      if (fromDist<0) {
-        stack.unshift([node[2], from, hit]);
-      }
-
-      if (fromDist>=0) {
-        stack.unshift([node[1], from, hit]);
-      }
-    } else {
-      if (toDist<0) {
-        stack.unshift([node[2], from, to]);
-      }
-
-      if (toDist>=0) {
-        stack.unshift([node[1], from, to]);
-      }
+      let hit = line.mulScalar((Math.abs(fromDist)/(Math.abs(fromDist)+Math.abs(toDist)))).addVector3(fromLeft);
+      toLeft = hit;
+      fromRight = hit;
+      advance = true;
     }
+
+    /*if ((fromDist>-mathEpsilon*64 && fromDist<mathEpsilon*64) || (toDist>-mathEpsilon*64 && toDist<mathEpsilon*64)) {
+      advance = true;
+    }*/
+
+    if (advance) {
+      stack.unshift([node[(side^1)], fromRight, toRight]);
+    }
+
+    stack.unshift([node[(side^0)], fromLeft, toLeft]);
+  }
+
+  if (bestPoly!==null) {
+    return [bestPoly, bestDist];
   }
 
   return null;

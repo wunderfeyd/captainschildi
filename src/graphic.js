@@ -2,12 +2,15 @@
 
 function GraphicManager(canvas) {
   this.program1 = null;
-  this.lightmapTextureSize = 1024;
+  this.lightmapTextureSize = 512;
   this.lightmapScale = 1/(this.lightmapTextureSize/16);
+
+  //this.lightmapTextureSize = 1024;
+  //this.lightmapScale = 1/(this.lightmapTextureSize/16);
   this.textureAtlas = new TextureAtlas(this.lightmapTextureSize, this.lightmapTextureSize);
   this.bsp = new BSP();
 
-  this.gl = canvas.getContext("webgl2");
+  this.gl = canvas.getContext("webgl2", {antialias:false}); //, {antialias:true});
   if (this.gl===null) {
     console.log("no webgl");
     return;
@@ -30,11 +33,10 @@ function GraphicManager(canvas) {
   }
 
   {
-    let matrix = Matrix4.prototype.identity();
+    let matrix;
     let mesh1 = Mesh.prototype.createBox();
-
-    matrix = matrix.scaleVector3(new Vector3(2, 2, 2));
-
+    matrix = Matrix4.prototype.identity();
+    matrix = matrix.scaleVector3(new Vector3(2, 1.5, 2));
     matrix = matrix.translateVector3(new Vector3(0, 0, 0));
     mesh1 = mesh1.mulMatrix4(matrix);
 
@@ -47,15 +49,25 @@ function GraphicManager(canvas) {
     let meshx2 = mesh2.cutMesh(mesh1, true).invertNormals();
 
     let mesh3 = Mesh.prototype.createBox();
+    matrix = Matrix4.prototype.identity();
     matrix = matrix.scaleVector3(new Vector3(5, 0.5, 5));
-    matrix = matrix.translateVector3(new Vector3(0, 3.0, 0));
+    matrix = matrix.translateVector3(new Vector3(0, 2.0, 0));
     mesh3 = mesh3.mulMatrix4(matrix);
+
+    let meshSun = Mesh.prototype.createSphere(8, 8);
+    matrix = Matrix4.prototype.identity();
+    matrix = matrix.scaleVector3(new Vector3(1, 1, 1));
+    matrix = matrix.translateVector3(new Vector3(0, -5.0, 0));
+    meshSun = meshSun.mulMatrix4(matrix);
+    for (let n = 0; n<meshSun.polygons.length; n++) {
+      meshSun.polygons[n].emitter = true;
+    }
 
     //let mesh = meshx1;
     let mesh = meshx1.concatMesh(meshx2);
     //let mesh = mesh1;
-    //mesh = mesh.concatMesh(mesh3);
-    mesh = mesh.concatMesh(mesh3);
+    mesh = mesh.concatCutMesh(mesh3);
+    mesh = mesh.concatMesh(meshSun);
     //let mesh = mesh1.concatMesh(mesh3);
     //mesh = mesh3;
 
@@ -111,75 +123,21 @@ function GraphicManager(canvas) {
     mesh = mesh.gluePolygons();
     this.mesh = mesh;*/
 
+    this.mesh.precalculateNormals();
+    this.bsp.fromMesh(this.mesh);
+    this.lightmap = new Lightmap();
+    this.lightmap.updateMesh(this.mesh, this.textureAtlas, this.lightmapScale, this.lightmapTextureSize);
+
     this.triangles = new Mesh();
-    let texarray = 0;
-    for (let n = 0; n<mesh.polygons.length; n++) {
-      let v = mesh.polygons[n];
-
-      let normal = v.calculateNormal();
-      let fit = fitNormal(normal);
-
-      // fix lightmaps
-      let extra = 100000.0;
-      let minX = extra;
-      let minY = extra;
-      for (let p = 0; p<v.points.length; p++) {
-        let p0 = v.points[p];
-        let x = fit[1].dotVector3(p0)*this.lightmapScale;
-        let y = fit[2].dotVector3(p0)*this.lightmapScale;
-        minX = Math.min(x, minX);
-        minY = Math.min(y, minY);
-        p0.texmap = new Vector2(x, y);
-      }
-
-      // adjust to next pixel
-      let frac = 1/this.lightmapTextureSize;
-      minX = Math.floor(minX/frac)*frac;
-      minY = Math.floor(minY/frac)*frac;
-      let maxX = 0;
-      let maxY = 0;
-      for (let p = 0; p<v.points.length; p++) {
-        let p0 = v.points[p];
-        p0.texmap.c0 -= minX;
-        p0.texmap.c1 -= minY;
-        maxX = Math.max(p0.texmap.c0, maxX);
-        maxY = Math.max(p0.texmap.c1, maxY);
-        p0.texmap.c0 += frac;
-        p0.texmap.c1 += frac;
-      }
-
-      maxX = Math.ceil(maxX/frac)+2;
-      maxY = Math.ceil(maxY/frac)+2;
-      texarray += maxX*maxY;
-      v.lightmap = new Array();
-      for (let fill = 0; fill<maxX*maxY; fill++) {
-        v.lightmap.push(new Color());
-      }
-
-      v.lightmapNX = fit[1];
-      v.lightmapNY = fit[2];
-      v.lightmapX = -minX+frac;
-      v.lightmapY = -minY+frac;
-      v.lightmapWidth = maxX;
-      v.lightmapHeight = maxY;
-
-      let atlas = this.textureAtlas.allocate(maxX, maxY);
-      v.lightmapXAtlas = atlas[0];
-      v.lightmapYAtlas = atlas[1];
-      console.log(n, maxX, maxY, texarray, atlas);
-    }
-
     for (let n = 0; n<mesh.polygons.length; n++) {
       let poly_tri = mesh.polygons[n].triangleFan();
       for (let m = 0; m<poly_tri.length; m++) {
-
         poly_tri[m].ref = mesh.polygons[n];
       }
 
       this.triangles.polygons = this.triangles.polygons.concat(poly_tri);
     }
 
-    this.bsp.fromMesh(this.mesh);
     console.log(this.bsp.trace(new Vector3(0, -10, 0), new Vector3(0, 10, 0)));
   }
 
@@ -187,6 +145,8 @@ function GraphicManager(canvas) {
   this.gl.bindTexture(this.gl.TEXTURE_2D, this.radianceTex0);
   this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
   this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+  //this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+  //this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
   this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAX_LEVEL, 0);
   this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
   this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
@@ -213,7 +173,7 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
   let sz = Math.cos(t);
   let ssx = Math.sin(-t);
   let ssz = Math.cos(-t);
-  let camera = new Vector3(sx*5, 0, sz*5);
+  let camera = new Vector3(sx*5, -1, sz*5);
   let camerax = new Vector3(sx*4, 0, sz*4);
   let up = new Vector3(0, 1, 0);
   let to = new Vector3(0, 0, 0);
@@ -261,7 +221,7 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
       console.log(selected_poly);
     }
 
-    for (let rays = 0; rays<10000; rays++) {
+    /*for (let rays = 0; rays<10000; rays++) {
       let lightsrc = new Vector3(0, -4, 0);
       let direction = Vector3.prototype.random();
       let lightdest = lightsrc.addVector3(direction.mulScalar(10000));
@@ -269,39 +229,17 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
       let minPoly = null;
       let bspres = this.bsp.trace(lightsrc, lightdest);
       if (bspres!==null) {
-        let dist = bspres.intersectingLine(lightsrc, lightdest);
-        if (dist!==null && (minDist===null || dist<minDist)) {
-          minPoly = bspres;
-          minDist = dist;
-        }
+        minPoly = bspres[0];
+        minDist = bspres[1];
       }
 
-      /*for (let n = 0; n<mesh.polygons.length; n++) {
-        let dist = mesh.polygons[n].intersectingLine(lightsrc, lightdest);
-        if (dist!==null && (minDist===null || dist<minDist)) {
-          minPoly = mesh.polygons[n];
-          minDist = dist;
-        }
-      }
-
-      let bspres = this.bsp.trace(lightsrc, lightdest);
-      if (bspres!=minPoly) {
-        console.log("urgs");
-      }*/
-
-      /*if ((bspres===null && minPoly!==null) || (bspres!==null && minPoly===null)) {
-        console.log(bspres, minPoly);
-      } else {
-        if (bspres!==null && minPoly!==null) {
-          console.log("same", lightsrc.subVector3(minPoly.points[0]).dotVector3(minPoly.calculateNormal()));
-          for (let x in bspres) {
-            //console.log(bspres[x], minPoly);
-            if (minPoly===bspres[x]) {
-              console.log("yep");
-            }
-          }
-        }
-      }*/
+      //for (let n = 0; n<mesh.polygons.length; n++) {
+      //let dist = mesh.polygons[n].intersectingLine(lightsrc, lightdest);
+      //if (dist!==null && (minDist===null || dist<minDist)) {
+      //  minPoly = mesh.polygons[n];
+      //  minDist = dist;
+      //}
+      //}
 
       if (minPoly) {
         let hit = lightsrc.addVector3(direction.mulScalar(minDist));
@@ -311,11 +249,19 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
         x = Math.max(Math.min(minPoly.lightmapWidth-1, x), 0);
         y = Math.max(Math.min(minPoly.lightmapHeight-1, y), 0);
         let p = y*minPoly.lightmapWidth+x;
-        minPoly.lightmap[p].c0 = 1;
-        minPoly.lightmap[p].c1 = 1;
-        minPoly.lightmap[p].c2 = 1;
+        minPoly.lightmap[p][0].c0 += 0.1;
+        minPoly.lightmap[p][0].c1 += 0.1;
+        minPoly.lightmap[p][0].c2 += 0.1;
       }
+    }*/
+
+    let timer = performance.now();
+    for (let rays = 0; rays<10000; rays++) {
+      this.lightmap.randomRay(this.bsp, this.lightmapScale, this.lightmapTextureSize);
     }
+
+    console.log(performance.now()-timer);
+    //this.lightmap.allRay(this.bsp);
 
     let mesh1 = Mesh.prototype.createSphere(8, 8);
     let matrix = Matrix4.prototype.identity();
@@ -398,21 +344,17 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
       coords_js.push(tri.points[1].c0, tri.points[1].c1, tri.points[1].c2);
       coords_js.push(tri.points[2].c0, tri.points[2].c1, tri.points[2].c2);
 
-      let r = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c0;
-      let g = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c1;
-      let b = 0.8; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c2;
+      let r = 1.0; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c0;
+      let g = 1.0; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c1;
+      let b = 1.0; //this.triangles.polygons[n].ref==null?0:this.testColors[this.triangles.polygons[n].ref].c2;
       if (tri.ref===selected_poly) {
-        r = 255;
-        b = 255;
+        r = 1.0;
+        b = 1.0;
         g = 0;
       }
 
       for (let k = 0; k<tri.points.length; k++) {
-        if (tri.points[k].radiance) {
-          colors_js.push(r, g, b, 1);
-        } else {
-          colors_js.push(r/4, g/4, b/4, 1);
-        }
+        colors_js.push(r, g, b, 1);
 
         if (tri.points[k].texmap!==null) {
           texmaps_js.push(tri.points[k].texmap.c0+tri.ref.lightmapXAtlas/this.lightmapTextureSize, tri.points[k].texmap.c1+tri.ref.lightmapYAtlas/this.lightmapTextureSize);
@@ -431,22 +373,77 @@ GraphicManager.prototype.clear = function(color, mouseX, mouseY) {
     for (let y = 0; y<this.lightmapTextureSize; y++) {
       for (let x = 0; x<this.lightmapTextureSize; x++) {
         let c = ((x^y)&1)*255;
-        pixels_js.push(0, 0, 0, 255);
+        pixels_js.push(255, 255, 255, 255);
       }
     }
 
+    let scaleColor = 0;
+    let scaleColors = 0;
     for (let n = 0; n<mesh.polygons.length; n++) {
       let v = mesh.polygons[n];
       if (v.lightmap) {
         let q = 0;
         for (let y = 0; y<v.lightmapHeight; y++) {
-          let p = ((y+v.lightmapYAtlas)*this.lightmapTextureSize+v.lightmapXAtlas)*4;
           for (let x = 0; x<v.lightmapWidth; x++) {
-            pixels_js[p+0] = v.lightmap[q].c0*255;
-            pixels_js[p+1] = v.lightmap[q].c1*255;
-            pixels_js[p+2] = v.lightmap[q].c2*255;
-            p+=4;
+            if (v.lightmap[q][2]!==null) {
+              scaleColor += v.lightmap[q][0].c0+v.lightmap[q][0].c1+v.lightmap[q][0].c2;
+              scaleColors++;
+            }
+
             q++;
+          }
+        }
+      }
+    }
+
+    if (scaleColor>0) {
+      scaleColor = 1/(scaleColor/(scaleColors/8));
+      // console.log(scaleColor);
+
+      for (let n = 0; n<mesh.polygons.length; n++) {
+        let v = mesh.polygons[n];
+        if (v.lightmap) {
+          let q = 0;
+          for (let y = 0; y<v.lightmapHeight; y++) {
+            let p = ((y+v.lightmapYAtlas)*this.lightmapTextureSize+v.lightmapXAtlas)*4;
+            for (let x = 0; x<v.lightmapWidth; x++) {
+              let cr = 0;
+              let cg = 0;
+              let cb = 0;
+              let m = 1;
+
+              if (v.lightmap[q][2]===null) {
+                for (let yy = -1; yy<=1; yy++) {
+                  if (yy+y>=0 && yy+y<v.lightmapHeight) {
+                    for (let xx = -1; xx<=1; xx++) {
+                      if (xx+x>=0 && xx+x<v.lightmapWidth) {
+                        let qq = q+yy*v.lightmapWidth+xx;
+                        cr += v.lightmap[qq][0].c0;
+                        cg += v.lightmap[qq][0].c1;
+                        cb += v.lightmap[qq][0].c2;
+                        m++;
+                      }
+                    }
+                  }
+                }
+
+                //cr = 1024;
+              } else {
+                cr += v.lightmap[q][0].c0;
+                cg += v.lightmap[q][0].c1;
+                cb += v.lightmap[q][0].c2;
+              }
+
+              v.lightmap[q][4].c0 = (cr/m)*scaleColor;
+              v.lightmap[q][4].c1 = (cr/m)*scaleColor;
+              v.lightmap[q][4].c2 = (cr/m)*scaleColor;
+              pixels_js[p+0] = Math.min(v.lightmap[q][4].c0, 1)*255;
+              pixels_js[p+1] = Math.min(v.lightmap[q][4].c1, 1)*255;
+              pixels_js[p+2] = Math.min(v.lightmap[q][4].c2, 1)*255;
+
+              p+=4;
+              q++;
+            }
           }
         }
       }
